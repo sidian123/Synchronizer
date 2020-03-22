@@ -1,0 +1,19 @@
+dev:
+  source:
+    name: FROM
+    host: localhost
+    port: 3306
+    user: root
+    password: 123456
+    schema: test
+    charset: utf8
+  target:
+    name: TO
+    host: localhost
+    port: 3306
+    user: root
+    password: 123456
+    schema: test2
+    charset: utf8
+
+
