@@ -63,13 +63,23 @@ public class PatchSQL {
         private List<String> deletedColumns=new LinkedList<>();
         private List<String> modifiedColumns=new LinkedList<>();
         private List<String> createdColumns=new LinkedList<>();
+        /**
+         * 该表中必须最后才能执行的
+         */
+        private List<String> afterSQL =new LinkedList<>();
+        /**
+         * 该表中必须再之前执行的
+         */
+        private List<String> beforeSQL=new LinkedList<>();
 
         public boolean isEmpty(){
             return deletedIndices.isEmpty()
                     && createdIndices.isEmpty()
                     && deletedColumns.isEmpty()
                     && modifiedColumns.isEmpty()
-                    && createdColumns.isEmpty();
+                    && createdColumns.isEmpty()
+                    && afterSQL.isEmpty()
+                    && beforeSQL.isEmpty();
         }
     }
 
@@ -83,11 +93,13 @@ public class PatchSQL {
         createdTables.forEach(s -> str.append(s).append(";\n"));
         str.append("#-------------表修改-----------\n");
         modifiedTables.forEach(modifiedTable -> {
+            modifiedTable.getBeforeSQL().forEach(s -> str.append(s).append(";\n"));
             modifiedTable.getDeletedIndices().forEach(s -> str.append(s).append(";\n"));
             modifiedTable.getDeletedColumns().forEach(s -> str.append(s).append(";\n"));
             modifiedTable.getCreatedColumns().forEach(s -> str.append(s).append(";\n"));
             modifiedTable.getModifiedColumns().forEach(s -> str.append(s).append(";\n"));
             modifiedTable.getCreatedIndices().forEach(s -> str.append(s).append(";\n"));
+            modifiedTable.getAfterSQL().forEach(s -> str.append(s).append(";\n"));
         });
         return str.toString();
     }

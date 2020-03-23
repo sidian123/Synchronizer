@@ -1,13 +1,17 @@
 package live.sidian.database.synchronizer.service;
 
-import live.sidian.database.synchronizer.model.*;
+import live.sidian.database.synchronizer.model.Column;
+import live.sidian.database.synchronizer.model.Index;
+import live.sidian.database.synchronizer.model.MetaData;
+import live.sidian.database.synchronizer.model.Table;
 import live.sidian.database.synchronizer.utils.SqlUtils;
 import org.springframework.stereotype.Service;
 
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -65,7 +69,7 @@ public class MetaDataService {
                     //新增索引
                     index = Index.builder()
                             .name(keyName)
-                            .columns(List.of(rs.getString("Column_name")))
+                            .columns(new ArrayList<>(Collections.singletonList(rs.getString("Column_name"))))
                             .type(rs.getInt("Non_unique") == 0 ? Index.IndexType.UNIQUE : Index.IndexType.INDEX)
                             .build();
                     table.getIndexes().put(index.getName(),index);

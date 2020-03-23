@@ -2,7 +2,10 @@ package live.sidian.database.synchronizer.service;
 
 import live.sidian.database.synchronizer.model.*;
 import live.sidian.database.synchronizer.utils.SqlUtils;
+import org.apache.commons.beanutils.BeanUtils;
+import org.springframework.util.StringUtils;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -16,6 +19,8 @@ public class MetaDataComparator {
     private static final String CREATE  ="create";
     private static final String DELETE="delete";
     private static final String MODIFY="modify";
+    private static final String AFTER ="after";
+    private static final String BEFORE="before";
 
 
     /**
@@ -47,6 +52,8 @@ public class MetaDataComparator {
                 modifiedTableSQL.getCreatedColumns().addAll(columnsPatch.get(CREATE));
                 modifiedTableSQL.getDeletedColumns().addAll(columnsPatch.get(DELETE));
                 modifiedTableSQL.getModifiedColumns().addAll(columnsPatch.get(MODIFY));
+                modifiedTableSQL.getAfterSQL().addAll(columnsPatch.get(AFTER));
+                modifiedTableSQL.getBeforeSQL().addAll(columnsPatch.get(BEFORE));
                 //差分表的所有索引
                 Map<String, List<String>> indicesPatch = diffIndices(targetFullTableName, table.getIndexes(), targetTable.getIndexes());
                 modifiedTableSQL.getCreatedIndices().addAll(indicesPatch.get(CREATE));
@@ -148,6 +155,8 @@ public class MetaDataComparator {
         resultPatchSQL.put(CREATE,new LinkedList<>());
         resultPatchSQL.put(DELETE,new LinkedList<>());
         resultPatchSQL.put(MODIFY,new LinkedList<>());
+        resultPatchSQL.put(AFTER,new LinkedList<>());
+        resultPatchSQL.put(BEFORE,new LinkedList<>());
         AtomicReference<Column> lastColumn=new AtomicReference<>();//source中上一个遍历的列
         HashSet<String> knownColumns = new HashSet<>();//target中已访问过的列
         String sqlHeader= String.format("alter table %s ",targetFullTableName);//下面用到的sql的头部片段
@@ -158,19 +167,24 @@ public class MetaDataComparator {
             Column targetColumn=targetColumns.get(columnName);
             if(targetColumn==null){//不存在
                 //添加补丁-新增列语句
-                resultPatchSQL.get(CREATE).add(
-                        String.format(
-                                "%s add %s %s",
-                                sqlHeader,
-                                buildColumnDefinePartSql(sourceColumn),
-                                lastColumn.get() ==null?"":"after "+ lastColumn.get().getName()
-                        )
-                );
-            }else {//存在
-                //比较约束
-                if(!sourceColumn.equals(targetColumn)) {//列不一致
-                    //修改约束
-                    resultPatchSQL.get(MODIFY).add(
+                if(!StringUtils.isEmpty(sourceColumn.getExtra()) ){//新增列有auto_increment约束
+                    //先添加无auto_increment约束的列声明
+                    try {
+                        Column obj = (Column)BeanUtils.cloneBean(sourceColumn);
+                        obj.setExtra("");
+                        resultPatchSQL.get(CREATE).add(
+                                String.format(
+                                        "%s add %s %s",
+                                        sqlHeader,
+                                        buildColumnDefinePartSql(obj),
+                                        lastColumn.get() ==null?"":"after "+ lastColumn.get().getName()
+                                )
+                        );
+                    } catch (IllegalAccessException | InstantiationException | InvocationTargetException | NoSuchMethodException e) {
+                        e.printStackTrace();
+                    }
+                    //添加有auto_increment约束的列修改, 且操作置后
+                    resultPatchSQL.get(AFTER).add(
                             String.format(
                                     "%s modify %s %s",
                                     sqlHeader,
@@ -178,6 +192,37 @@ public class MetaDataComparator {
                                     lastColumn.get() ==null?"":"after "+ lastColumn.get().getName()
                             )
                     );
+                }else{
+                    resultPatchSQL.get(CREATE).add(
+                            String.format(
+                                    "%s add %s %s",
+                                    sqlHeader,
+                                    buildColumnDefinePartSql(sourceColumn),
+                                    lastColumn.get() ==null?"":"after "+ lastColumn.get().getName()
+                            )
+                    );
+                }
+            }else {//存在
+                //比较约束
+                if(!sourceColumn.equals(targetColumn)) {//列不一致
+                    //修改约束
+                    String sql=String.format(
+                            "%s modify %s %s",
+                            sqlHeader,
+                            buildColumnDefinePartSql(sourceColumn),
+                            lastColumn.get() ==null?"":"after "+ lastColumn.get().getName()
+                    );
+                    if(!sourceColumn.getExtra().equals(targetColumn.getExtra())) {//有auto_increment约束的改动
+                        if(targetColumn.getExtra().equals("")){//要新增auto_increment
+                            //操作置后
+                            resultPatchSQL.get(AFTER).add(sql);
+                        }else{//要删除auto_increment
+                            //先操作, 后索引
+                            resultPatchSQL.get(BEFORE).add(sql);
+                        }
+                    }else{
+                        resultPatchSQL.get(MODIFY).add(sql);
+                    }
                 }
                 knownColumns.add(targetColumn.getName());
             }
@@ -186,10 +231,18 @@ public class MetaDataComparator {
         //删除target列中多余的字段
         Set<String> redundantColumns = new HashSet<>(targetColumns.keySet());
         redundantColumns.removeAll(knownColumns);
-        redundantColumns.forEach(columnName-> resultPatchSQL.get(DELETE).add(
-                String.format("%s drop %s",sqlHeader, columnName)
-        ));
-
+        redundantColumns.forEach(columnName-> {
+            if(!StringUtils.isEmpty(targetColumns.get(columnName).getExtra())){//该列有auto_increment约束
+                //操作置后
+                resultPatchSQL.get(AFTER).add(
+                        String.format("%s drop %s",sqlHeader, columnName)
+                );
+            }else{
+                resultPatchSQL.get(DELETE).add(
+                        String.format("%s drop %s",sqlHeader, columnName)
+                );
+            }
+        });
         return resultPatchSQL;
     }
 
