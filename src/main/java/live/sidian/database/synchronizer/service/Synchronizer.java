@@ -30,8 +30,8 @@ public class Synchronizer {
         validate(source);
         validate(target);
         //数据库元数据初始化
-        MetaData sourceMetaData = metaDataInitialization.initMetaData(source);
-        MetaData targetMetaData = metaDataInitialization.initMetaData(target);
+        MetaData sourceMetaData = metaDataInitialization.init(source);
+        MetaData targetMetaData = metaDataInitialization.init(target);
         //比较
         PatchSQL diff = MetaDataComparator.diff(sourceMetaData, targetMetaData);
         //打印

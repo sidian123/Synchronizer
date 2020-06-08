@@ -24,7 +24,7 @@ public class MetaDataInitialization {
     /**
      * 数据库元数据初始化
      */
-    MetaData initMetaData(Database database) throws FailInitiateException {
+    MetaData init(Database database) throws FailInitiateException {
         //装配对象
         MetaData metaData = MetaData.builder()
                 .jdbcUrl(
