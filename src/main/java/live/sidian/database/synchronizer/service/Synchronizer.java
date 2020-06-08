@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.InvocationTargetException;
-import java.sql.SQLException;
 
 /**
  * @author sidian
@@ -21,7 +20,7 @@ import java.sql.SQLException;
 @Service
 public class Synchronizer {
     @Autowired
-    MetaDataService metaDataService;
+    MetaDataInitialization metaDataInitialization;
 
     /**
      * 同步结构
@@ -31,36 +30,14 @@ public class Synchronizer {
         validate(source);
         validate(target);
         //数据库元数据初始化
-        MetaData sourceMetaData=initMetaData(source);
-        MetaData targetMetaData=initMetaData(target);
+        MetaData sourceMetaData = metaDataInitialization.initMetaData(source);
+        MetaData targetMetaData = metaDataInitialization.initMetaData(target);
         //比较
         PatchSQL diff = MetaDataComparator.diff(sourceMetaData, targetMetaData);
         //打印
         System.out.println(diff.print());
     }
 
-    /**
-     * 数据库元数据初始化
-     */
-    private MetaData initMetaData(Database database) throws FailInitiateException {
-        //装配对象
-        MetaData metaData = MetaData.builder()
-                .jdbcUrl(
-                        String.format("jdbc:mysql://%s/%s?characterEncoding=%s&serverTimezone=GMT%%2B8",
-                                database.getHost(), database.getSchema(), database.getCharset())
-                )
-                .user(database.getUser())
-                .password(database.getPassword())
-                .schema(database.getSchema())
-                .build();
-        //初始化
-        try {
-            metaDataService.init(metaData);
-        } catch (SQLException e) {
-            throw new FailInitiateException("数据库元数据初始化失败",e);
-        }
-        return metaData;
-    }
 
     private void validate(Database database) {
         //获取所有属性

@@ -1,10 +1,9 @@
 package live.sidian.database.synchronizer.service;
 
-import live.sidian.database.synchronizer.model.Column;
-import live.sidian.database.synchronizer.model.Index;
-import live.sidian.database.synchronizer.model.MetaData;
-import live.sidian.database.synchronizer.model.Table;
+import live.sidian.database.synchronizer.exception.FailInitiateException;
+import live.sidian.database.synchronizer.model.*;
 import live.sidian.database.synchronizer.utils.SqlUtils;
+import lombok.extern.apachecommons.CommonsLog;
 import org.springframework.stereotype.Service;
 
 import java.sql.DriverManager;
@@ -18,22 +17,40 @@ import java.util.Map;
  * @author sidian
  * @date 2020/3/21 20:15
  */
+@CommonsLog
 @Service
-public class MetaDataService {
+public class MetaDataInitialization {
+
     /**
-     * 元数据初始化
-     * @param metaData
-     * @throws SQLException
+     * 数据库元数据初始化
      */
-    public void init(MetaData metaData) throws SQLException {
-        try{
+    MetaData initMetaData(Database database) throws FailInitiateException {
+        //装配对象
+        MetaData metaData = MetaData.builder()
+                .jdbcUrl(
+                        String.format("jdbc:mysql://%s/%s?characterEncoding=%s&serverTimezone=GMT%%2B8",
+                                database.getHost(), database.getSchema(), database.getCharset())
+                )
+                .user(database.getUser())
+                .password(database.getPassword())
+                .schema(database.getSchema())
+                .build();
+        //初始化
+        try {
             doInit(metaData);
-        }finally {
+        } catch (SQLException e) {
+            throw new FailInitiateException("数据库元数据初始化失败", e);
+        } finally {
             //释放资源
-            if(metaData.getConnection()!=null){
-                metaData.getConnection().close();
+            if (metaData.getConnection() != null) {
+                try {
+                    metaData.getConnection().close();
+                } catch (SQLException e) {
+                    log.warn("链接关闭失败", e);
+                }
             }
         }
+        return metaData;
     }
 
     private void doInit(MetaData metaData) throws SQLException {
